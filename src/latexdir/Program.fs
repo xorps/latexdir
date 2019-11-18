@@ -37,13 +37,13 @@ module Views =
         ]
 
     let partial () =
-        h1 [] [ encodedText "Latex Directory" ]
+        h1 [] [ img [ _src "/LatexDirectory.png" ] ]
 
     let index (model : Message) =
         [
             partial()
             p [] [ 
-                input [ attr "type" "text" ] 
+                input [ _type "text" ] 
             ]
         ] |> layout
 
