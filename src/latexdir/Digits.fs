@@ -9,3 +9,5 @@ module Digits =
         else 
             None
     let ToString (Digits s) = s
+
+let digits = Digits.create

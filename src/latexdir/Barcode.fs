@@ -6,19 +6,27 @@ open Number.Values
 open Control
 open Control.Function
 
-type NDC_11 = NDC_11 of Digits<_5> * Digits<_4> * Digits<_2>
+let private join a b c = Digits.ToString a + "-" + Digits.ToString b + "-" + Digits.ToString c
 
-let Mk_NDC_11 = curry3 NDC_11
+type NDC_11 = NDC_11 of Digits<_5> * Digits<_4> * Digits<_2>
 
 type NDC_10 =
     | NDC_4_4_2 of Digits<_4> * Digits<_4> * Digits<_2>
     | NDC_5_3_2 of Digits<_5> * Digits<_3> * Digits<_2>
-    | NDC_5_4_1 of Digits<_5> * Digits<_4> * Digits<_1>
+    | NDC_5_4_1 of Digits<_5> * Digits<_4> * Digits<_1> with
+    static member AsString self =
+        match self with
+        | NDC_4_4_2(a, b, c) -> join a b c
+        | NDC_5_3_2(a, b, c) -> join a b c
+        | NDC_5_4_1(a, b, c) -> join a b c
 
-let to_NDC_11 = function
-    | NDC_4_4_2(x, y, z) -> let x = Digits.create ("0" + Digits.ToString x) _5 in Option.lift1 (skip1 Mk_NDC_11 __ y z) x
-    | NDC_5_3_2(x, y, z) -> let y = Digits.create ("0" + Digits.ToString y) _4 in Option.lift1 (skip2 Mk_NDC_11 x __ z) y
-    | NDC_5_4_1(x, y, z) -> let z = Digits.create ("0" + Digits.ToString z) _2 in Option.lift1 (skip3 Mk_NDC_11 x y __) z
+module NDC11 =
+    let private Return = curry3 NDC_11
+    let ToString (NDC_11 (a, b, c)) = join a b c
+    let FromNDC10 = function
+    | NDC_4_4_2(x, y, z) -> let x = Digits.create ("0" + Digits.ToString x) _5 in Option.lift1 (skip1 Return __ y z) x
+    | NDC_5_3_2(x, y, z) -> let y = Digits.create ("0" + Digits.ToString y) _4 in Option.lift1 (skip2 Return x __ z) y
+    | NDC_5_4_1(x, y, z) -> let z = Digits.create ("0" + Digits.ToString z) _2 in Option.lift1 (skip3 Return x y __) z
 
 let possible (s: Digits<_10>) =
     let s = Digits.ToString s
