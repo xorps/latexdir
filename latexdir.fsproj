@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/GiraffeViewEngine.fs" />
+    <Compile Include="src/Number.fs" />
+    <Compile Include="src/Digits.fs" />
+    <Compile Include="src/Control.fs" />
+    <Compile Include="src/Barcode.fs" />
+    <Compile Include="src/View.fs" />
+    <Compile Include="src/Search.fs" />
+    <Compile Include="src/Controller.fs" />
+    <Compile Include="src/Main.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Text.RegexProvider" Version="2.1.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="TaskBuilder.fs" Version="2.1.0" />
+  </ItemGroup>
+
+</Project>

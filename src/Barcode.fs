@@ -46,3 +46,36 @@ let possible (s: Digits<_10>) =
         let z = Digits.create s.[9..] _1
         Option.liftT3 NDC_5_4_1 x y z
     Option.lift3 (fun x y z -> [| x; y; z |]) x y z
+
+module Regex =
+    open FSharp.Text.RegexProvider
+
+    type NDC442Regex = Regex< @"(?<A>\d{4})-(?<B>\d{4})-(?<C>\d{2})">
+    type NDC532Regex = Regex< @"(?<A>\d{5})-(?<B>\d{3})-(?<C>\d{2})">
+    type NDC541Regex = Regex< @"(?<A>\d{5})-(?<B>\d{4})-(?<C>\d{1})">
+
+    let tryNDC442 s =
+        NDC442Regex().TryTypedMatch(s) |> Option.bind (fun r ->
+            let x = digits r.A.Value _4
+            let y = digits r.B.Value _4
+            let z = digits r.C.Value _2
+            Option.liftT3 NDC_4_4_2 x y z
+        )
+
+    let tryNDC532 s = fun () ->
+        NDC532Regex().TryTypedMatch(s) |> Option.bind (fun r ->
+            let x = digits r.A.Value _5
+            let y = digits r.B.Value _3
+            let z = digits r.C.Value _2
+            Option.liftT3 NDC_5_3_2 x y z
+        )
+
+    let tryNDC541 s = fun () ->
+        NDC541Regex().TryTypedMatch(s) |> Option.bind (fun r ->
+            let x = digits r.A.Value _5
+            let y = digits r.B.Value _4
+            let z = digits r.C.Value _1
+            Option.liftT3 NDC_5_4_1 x y z
+        )
+
+    let tryParse s = tryNDC442 s |> Option.orElseWith (tryNDC532 s) |> Option.orElseWith (tryNDC541 s)

@@ -5,23 +5,23 @@ body {
     font-size: .9em;
 }
 
-p {
+p.search {
     text-align: center;
 }
 
-h1 {
+h1.logo {
     text-align: center;
     font-size: 1.5em;
     color: #334499;
 }
 
-img {
+img.logo {
     max-width: 640px;
     width: 50%;
     height: auto;
 }
 
-input {
+input.search {
     width: 30%;
     max-width: 420px;
     height: 45px;
@@ -38,13 +38,51 @@ input {
     font-size: 16px;
 }
 
+.search-result {
+    font-size: 12pt;
+    font-family: Verdana, Geneva, sans-serif;
+    text-align: center;
+    margin-top: 3em;
+}
+
+.product {
+    font-size: 12pt;
+    font-family: Verdana, Geneva, sans-serif;
+    margin-top: 3em;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 400px;
+    height: 300px;
+}
+
+.product .img {
+    float: left;
+    width: 30%;
+    height: 100%;
+}
+
+.product .img img {
+    width: 100%;
+    position: relative;
+    top: 10%;
+}
+
+.product .text {
+    width: 70%;
+    float: right
+}
+
+.clear {
+    clear: both;
+}
+
 @media (orientation : portrait) {
-    img {
+    img.logo {
         max-width: 100%;
         height: auto;
     }
 
-    input {
+    input.search {
         width: 60%;
         padding-top: 0.5em;
         padding-bottom: 0.5em;

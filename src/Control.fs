@@ -27,21 +27,18 @@ module Option =
 
 module Task =
     open FSharp.Control.Tasks.V2.ContextInsensitive
+
     let from a = task { return a }
+
     let map<'a, 'b> (f : 'a -> 'b) (t : System.Threading.Tasks.Task<'a>) = task {
         let! res = t
         return f res
-    }   
+    }
+
     let bind<'a, 'b> (f : 'a -> System.Threading.Tasks.Task<'b>) (t : System.Threading.Tasks.Task<'a>) = task {
         let! res = t
         return! f res
     }
-
-module TaskOption =
-    let map f = Task.map (Option.map f)
-
-module OptionArray =
-    let map f = Option.map (Array.map f)
 
 module TaskResult =
     type TaskResultBuilder() =
@@ -53,7 +50,7 @@ module TaskResult =
         member _.Return(x) = Task.from (Ok x)
         member _.Zero() = Task.from (Ok ())
 
-    let taskresult = TaskResultBuilder()
-
     let from x = Task.from (Ok x)
 
+module TaskResultBuilder =
+    let taskresult = TaskResult.TaskResultBuilder()
