@@ -6,6 +6,7 @@ module Object =
 module Function =
     type Skip() = class end
     let __ = Skip()
+    let uncurry2 f = fun (a, b) -> f a b
     let curry2 f a b = f (a, b)
     let curry3 f a b c = f (a, b, c)
     let skip1 f (_: Skip) b c = fun a -> f a b c
@@ -25,22 +26,41 @@ module Option =
         
     let liftT3 f = lift3 (fun x y z -> f (x, y, z))
 
+module Result =
+    /// does not combine errors, fails with first error
+    let zip<'a, 'b, 'e> ((a : Result<'a, 'e>), (b : Result<'b, 'e>)): Result<'a * 'b, 'e> =
+        a |> Result.bind (fun x -> b |> Result.map (fun y -> x, y))
+    /// somewhat like a comand
+    let extend f = function
+    | Ok a -> a
+    | Error e -> f (Error e)
+
 module Task =
     open FSharp.Control.Tasks.V2.ContextInsensitive
+    open System.Threading.Tasks
 
     let from a = task { return a }
 
-    let map<'a, 'b> (f : 'a -> 'b) (t : System.Threading.Tasks.Task<'a>) = task {
+    let map<'a, 'b> (f : 'a -> 'b) (t : Task<'a>) = task {
         let! res = t
         return f res
     }
 
-    let bind<'a, 'b> (f : 'a -> System.Threading.Tasks.Task<'b>) (t : System.Threading.Tasks.Task<'a>) = task {
+    let bind<'a, 'b> (f : 'a -> Task<'b>) (t : Task<'a>) = task {
         let! res = t
         return! f res
     }
 
+    let zip<'a, 'b> (a : Task<'a>) (b : Task<'b>): Task<'a * 'b> = task {
+        let! _ = Task.WhenAll(a, b)
+        let! x = a
+        let! y = b
+        return x, y
+    }
+
 module TaskResult =
+    open System.Threading.Tasks
+
     type TaskResultBuilder() =
         member _.Bind<'a, 'b, 'e>(x, f) = x |> Task.bind<Result<'a, 'e>, Result<'b, 'e>> (fun res ->
             match res with
@@ -52,5 +72,17 @@ module TaskResult =
 
     let from x = Task.from (Ok x)
 
+    let map<'a, 'b, 'e> (f: 'a -> 'b) (a: Task<Result<'a, 'e>>): Task<Result<'b, 'e>> =
+        a |> Task.map (Result.map f)
+
+    let bind<'a, 'b, 'e> (f: 'a -> Task<Result<'b, 'e>>) (a: Task<Result<'a, 'e>>): Task<Result<'b, 'e>> =
+        a |> Task.bind (fun it -> it |> Result.map f |> Result.extend Task.FromResult)
+
+    module Operators =
+        let inline (<&>) m f = m |> map f
+        let inline (>>=) m f = m |> bind f
+
+
 module TaskResultBuilder =
     let taskresult = TaskResult.TaskResultBuilder()
+

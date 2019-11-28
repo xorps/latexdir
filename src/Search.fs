@@ -6,8 +6,6 @@ open FSharp.Control.Tasks.V2.ContextInsensitive
 open Newtonsoft.Json
 open Digits
 open Number.Values
-open Control
-open Control.TaskResultBuilder
 
 type HttpStatusCode = System.Net.HttpStatusCode
 
@@ -26,6 +24,9 @@ type SearchError =
     | ServiceError of ServiceError
     | EmptyGetString of SearchError []
     | EmptyJson of SearchError []
+    | DBError of DB.DBError
+    | DBErrors of DB.DBError []
+    | FailedGetLatexInfo of SearchError []
 
 type SearchResult<'T> = Result<'T, SearchError>
 type SearchTask<'T> = Task<SearchResult<'T>>
@@ -70,7 +71,7 @@ let permutations (query : string): SearchResult<Barcode.NDC_10 []> =
     |> Option.orElseWith (fun () -> Barcode.Regex.tryParse query |> Option.map (Array.create 1))
     |> ok_or InvalidInput
 
-let join<'T, 'E, 'B> (err : 'E [] -> 'B) (r : Result<'T, 'E> []): Result<'T [], 'B> =
+let join_results<'T, 'E, 'B> (err : 'E [] -> 'B) (r : Result<'T, 'E> []): Result<'T [], 'B> =
     let successes = r |> Array.choose (fun it -> match it with | Ok a -> Some a; | _ -> None)
     let errors = r |> Array.choose (fun it -> match it with | Error e -> Some e; | _ -> None)
     if Array.isEmpty successes then
@@ -81,19 +82,96 @@ let join<'T, 'E, 'B> (err : 'E [] -> 'B) (r : Result<'T, 'E> []): Result<'T [], 
 let private error_view = function
 | InvalidInput -> View.showText "Invalid Input"
 | NoResults -> View.showText "No Results"
-| EmptyGetString e -> View.showText ("No Results - Empty Get String: " + (e |> Array.map Object.ToString |> String.concat ","))
+| EmptyGetString e -> View.showText ("No Results - Empty Get String: " + (e |> Array.map Control.Object.ToString |> String.concat ","))
 | _ as e -> View.showText ("Error - " + (e.ToString()))
 
 let private view = function
 | Ok products -> View.products (products)
 | Error err -> error_view err
 
-let api (searchTerms : string) = task {
-    let! res = taskresult {
-        let! ndcs = Task.FromResult (permutations searchTerms)
-        let! ndcs = Task.WhenAll (ndcs |> Array.map query) |> Task.map (join EmptyGetString)
-        let! ndcs = Task.FromResult (ndcs |> Array.map readJSON |> join EmptyJson)
-        return ndcs
+module APIv1 =
+    open Control
+    open Control.TaskResultBuilder
+
+    let api (searchTerms : string) = task {
+        let! res = taskresult {
+            let! ndcs = Task.FromResult (permutations searchTerms)
+            let! ndcs = Task.WhenAll (ndcs |> Array.map query) |> Task.map (join_results EmptyGetString)
+            let! ndcs = Task.FromResult (ndcs |> Array.map readJSON |> join_results EmptyJson)
+            return ndcs
+        }
+        return View.render (view res)
     }
-    return View.render (view res)
-}
+
+type LatexInfo = LatexFree | ContainsLatex | NoData with
+    static member From: (DB.Row option -> LatexInfo) = function
+        | Some r -> if r.latex_free then LatexFree else ContainsLatex
+        | None -> NoData
+
+module APIv2_Helpers = 
+    open Control
+
+    let getFDAInfo barcodes =
+        barcodes 
+        |> Array.map query
+        |> Task.WhenAll
+        |> Task.map (join_results EmptyGetString)
+        |> Task.map (Result.map (Array.map readJSON))
+        |> Task.map (Result.bind (join_results EmptyJson))
+
+    let getLatexInfo conn barcodes =
+        barcodes
+        |> Array.map Barcode.NDC_10.AsString
+        |> Array.map (DB.findOne conn)
+        |> Task.WhenAll
+        |> Task.map (join_results DBErrors)
+        |> Task.map (Result.map (Array.map LatexInfo.From))
+
+module APIv2 =
+    open Control
+    open Control.Function
+    open Control.TaskResult.Operators
+    open APIv2_Helpers
+
+    let run conn s =
+        permutations s |> Task.FromResult
+        >>= (fun barcodes -> Task.zip (getLatexInfo conn barcodes) (getFDAInfo barcodes) |> Task.map Result.zip)
+        <&> (uncurry2 Array.allPairs)
+
+module APIv3 =
+    open Control
+
+    let getFDAInfo barcodes =
+        barcodes 
+        |> Array.map query
+        |> Task.WhenAll
+        |> Task.map (join_results EmptyGetString)
+        |> Task.map (Result.map (Array.map readJSON))
+        |> Task.map (Result.bind (join_results EmptyJson))
+
+    let getLatexInfoArray conn ndc =
+        ndc
+        |> Array.map (DB.findOne conn)
+        |> Task.WhenAll
+        |> Task.map (join_results DBErrors)
+        |> Task.map (Result.map (Array.map LatexInfo.From))
+
+    let getLatexInfo conn (p : View.Product) =
+        p.NDC
+        |> DB.findOne conn
+        |> Task.map (Result.map LatexInfo.From)
+        |> Task.map (Result.mapError DBError)
+
+    let withLatexInfo conn (p : View.Product) =
+        getLatexInfo conn p
+        |> Task.map (Result.map (fun it -> (p, it)))
+
+    let api conn s =
+        permutations s
+        |> Task.FromResult
+        |> Task.map (Result.map getFDAInfo)
+        |> Task.bind (Result.extend Task.FromResult)
+        |> Task.map (Result.map (Array.map (withLatexInfo conn)))
+        |> Task.map (Result.map Task.WhenAll)
+        |> Task.map (Result.map (Task.map (join_results FailedGetLatexInfo)))
+        |> Task.bind (Result.extend Task.FromResult)
