@@ -72,11 +72,12 @@ module TaskResult =
 
     let from x = Task.from (Ok x)
 
-    let map<'a, 'b, 'e> (f: 'a -> 'b) (a: Task<Result<'a, 'e>>): Task<Result<'b, 'e>> =
-        a |> Task.map (Result.map f)
+    //let flatten = Task.bind (Result.extend Task.FromResult)
 
-    let bind<'a, 'b, 'e> (f: 'a -> Task<Result<'b, 'e>>) (a: Task<Result<'a, 'e>>): Task<Result<'b, 'e>> =
-        a |> Task.bind (fun it -> it |> Result.map f |> Result.extend Task.FromResult)
+    let map<'a, 'b, 'e> (f: 'a -> 'b): Task<Result<'a, 'e>> -> Task<Result<'b, 'e>> = Task.map (Result.map f)
+
+    let bind<'a, 'b, 'e> (f: 'a -> Task<Result<'b, 'e>>): Task<Result<'a, 'e>> -> Task<Result<'b, 'e>> =
+        Task.bind (fun it -> it |> Result.map f |> Result.extend Task.FromResult)
 
     module Operators =
         let inline (<&>) m f = m |> map f

@@ -3,6 +3,12 @@ module View
 open Giraffe.GiraffeViewEngine
 
 type Product = {BrandName: string; NDC: string; GenericName: string; Manufacturer: string}
+type LatexInfo = LatexFree | ContainsLatex | NoData with
+    member this.AsString() = 
+        match this with
+        | LatexFree -> "Latex Free"
+        | ContainsLatex -> "Contains Latex"
+        | NoData -> "No Data on Latex"
 
 let render = renderHtmlDocument
 
@@ -39,19 +45,20 @@ let showText (text : string) =
         p [ _class "search-result" ] [ encodedText text ]
     ] |> layout
 
-let private product (prod : Product) = div [ _class "product" ] [
+let private product (prod : Product, latex : LatexInfo) = div [ _class "product" ] [
     div [ _class "img" ] [ img [ _src "/vial.png" ] ]
     div [ _class "text" ] [
         p [] [ encodedText prod.NDC ]
         p [] [ encodedText prod.BrandName ]
         p [] [ encodedText prod.GenericName ]
         p [] [ encodedText prod.Manufacturer ]
+        p [] [ encodedText (latex.AsString()) ]
     ]
     div [ _class "clear" ] []
 ]
 
-let products (prod : Product []) =
-    let products = prod |> Array.map product |> Array.toList
+let products prods =
+    let products = prods |> Array.map product |> Array.toList
     [
         logo
         searchForm

@@ -79,19 +79,20 @@ let join_results<'T, 'E, 'B> (err : 'E [] -> 'B) (r : Result<'T, 'E> []): Result
     else
         Ok successes
 
-let private error_view = function
-| InvalidInput -> View.showText "Invalid Input"
-| NoResults -> View.showText "No Results"
-| EmptyGetString e -> View.showText ("No Results - Empty Get String: " + (e |> Array.map Control.Object.ToString |> String.concat ","))
-| _ as e -> View.showText ("Error - " + (e.ToString()))
-
-let private view = function
-| Ok products -> View.products (products)
-| Error err -> error_view err
-
+(*
 module APIv1 =
     open Control
     open Control.TaskResultBuilder
+
+    let private error_view = function
+    | InvalidInput -> View.showText "Invalid Input"
+    | NoResults -> View.showText "No Results"
+    | EmptyGetString e -> View.showText ("No Results - Empty Get String: " + (e |> Array.map Control.Object.ToString |> String.concat ","))
+    | _ as e -> View.showText ("Error - " + (e.ToString()))
+    
+    let private view = function
+    | Ok products -> View.products (products)
+    | Error err -> error_view err
 
     let api (searchTerms : string) = task {
         let! res = taskresult {
@@ -102,11 +103,12 @@ module APIv1 =
         }
         return View.render (view res)
     }
+*)
 
-type LatexInfo = LatexFree | ContainsLatex | NoData with
-    static member From: (DB.Row option -> LatexInfo) = function
-        | Some r -> if r.latex_free then LatexFree else ContainsLatex
-        | None -> NoData
+type View.LatexInfo with
+    static member From: (DB.Row option -> View.LatexInfo) = function
+        | Some r -> if r.latex_free then View.LatexFree else View.ContainsLatex
+        | None -> View.NoData
 
 module APIv2_Helpers = 
     open Control
@@ -125,7 +127,7 @@ module APIv2_Helpers =
         |> Array.map (DB.findOne conn)
         |> Task.WhenAll
         |> Task.map (join_results DBErrors)
-        |> Task.map (Result.map (Array.map LatexInfo.From))
+        |> Task.map (Result.map (Array.map View.LatexInfo.From))
 
 module APIv2 =
     open Control
@@ -140,13 +142,14 @@ module APIv2 =
 
 module APIv3 =
     open Control
+    open Control.TaskResult.Operators
 
     let getFDAInfo barcodes =
         barcodes 
         |> Array.map query
         |> Task.WhenAll
         |> Task.map (join_results EmptyGetString)
-        |> Task.map (Result.map (Array.map readJSON))
+        <&> Array.map readJSON
         |> Task.map (Result.bind (join_results EmptyJson))
 
     let getLatexInfoArray conn ndc =
@@ -154,24 +157,33 @@ module APIv3 =
         |> Array.map (DB.findOne conn)
         |> Task.WhenAll
         |> Task.map (join_results DBErrors)
-        |> Task.map (Result.map (Array.map LatexInfo.From))
+        <&> Array.map View.LatexInfo.From
 
     let getLatexInfo conn (p : View.Product) =
         p.NDC
         |> DB.findOne conn
-        |> Task.map (Result.map LatexInfo.From)
+        <&> View.LatexInfo.From
         |> Task.map (Result.mapError DBError)
 
     let withLatexInfo conn (p : View.Product) =
         getLatexInfo conn p
-        |> Task.map (Result.map (fun it -> (p, it)))
+        <&> fun it -> (p, it)
+
+    let private error_view = function
+    | InvalidInput -> View.showText "Invalid Input"
+    | NoResults -> View.showText "No Results"
+    | EmptyGetString e -> View.showText ("No Results - Empty Get String: " + (e |> Array.map Control.Object.ToString |> String.concat ","))
+    | _ as e -> View.showText ("Error - " + (e.ToString()))
+    
+    let private view = function
+    | Ok products -> View.products (products)
+    | Error err -> error_view err
 
     let api conn s =
         permutations s
         |> Task.FromResult
-        |> Task.map (Result.map getFDAInfo)
-        |> Task.bind (Result.extend Task.FromResult)
-        |> Task.map (Result.map (Array.map (withLatexInfo conn)))
-        |> Task.map (Result.map Task.WhenAll)
-        |> Task.map (Result.map (Task.map (join_results FailedGetLatexInfo)))
-        |> Task.bind (Result.extend Task.FromResult)
+        >>= getFDAInfo
+        <&> Array.map (withLatexInfo conn)
+        <&> Task.WhenAll
+        >>= Task.map (join_results FailedGetLatexInfo)
+        |> Task.map (fun a -> View.render (view a))

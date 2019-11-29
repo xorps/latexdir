@@ -16,5 +16,5 @@ type AppController (logger : ILogger<AppController>) =
     [<HttpGet("search")>]
     member self.Search([<FromQuery>] query : string) = 
         query
-        |> Search.APIv1.api
+        |> Search.APIv3.api "connection string"
         |> Task.map self.html
