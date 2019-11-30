@@ -143,6 +143,10 @@ module APIv2 =
 module APIv3 =
     open Control
     open Control.TaskResult.Operators
+    
+    type Log = string -> obj -> unit
+    type Connection = string
+    type Query = string
 
     let getFDAInfo barcodes =
         barcodes 
@@ -169,21 +173,24 @@ module APIv3 =
         getLatexInfo conn p
         <&> fun it -> (p, it)
 
-    let private error_view = function
-    | InvalidInput -> View.showText "Invalid Input"
-    | NoResults -> View.showText "No Results"
-    | EmptyGetString e -> View.showText ("No Results - Empty Get String: " + (e |> Array.map Control.Object.ToString |> String.concat ","))
-    | _ as e -> View.showText ("Error - " + (e.ToString()))
+    let private error_view err log =
+        match err with
+        | InvalidInput -> View.showText "Invalid Input"
+        | NoResults -> View.showText "No Results"
+        | _ as e -> 
+            do log "search api failed" e
+            View.showText "Internal Error - Something went wrong :("
     
-    let private view = function
-    | Ok products -> View.products (products)
-    | Error err -> error_view err
+    let private view res log =
+        match res with
+        | Ok products -> View.products (products)
+        | Error err -> error_view err log
 
-    let api conn s =
+    let api (conn : Connection) (log : Log) (s : Query) =
         permutations s
         |> Task.FromResult
         >>= getFDAInfo
         <&> Array.map (withLatexInfo conn)
         <&> Task.WhenAll
         >>= Task.map (join_results FailedGetLatexInfo)
-        |> Task.map (fun a -> View.render (view a))
+        |> Task.map (fun a -> View.render (view a log))
